@@ -717,7 +717,14 @@ impl GlowWinitRunning<'_> {
                     "failed to get current context to swap buffers".to_owned(),
                 ))?;
 
-            gl_surface.swap_buffers(context)?;
+            // Skip swap_buffers when window is not visible.
+            // On Wayland with vsync, eglSwapBuffers blocks indefinitely
+            // for hidden windows, causing the app to hang (ANR).
+            let dominated = window.is_minimized() == Some(true)
+                || window.is_visible() == Some(false);
+            if !dominated {
+                gl_surface.swap_buffers(context)?;
+            }
             frame_timer.resume();
         }
 
@@ -1531,8 +1538,12 @@ fn render_immediate_viewport(
 
     {
         profiling::scope!("swap_buffers");
-        if let Err(err) = gl_surface.swap_buffers(current_gl_context) {
-            log::error!("swap_buffers failed: {err}");
+        let dominated = window.is_minimized() == Some(true)
+            || window.is_visible() == Some(false);
+        if !dominated {
+            if let Err(err) = gl_surface.swap_buffers(current_gl_context) {
+                log::error!("swap_buffers failed: {err}");
+            }
         }
     }
 
